@@ -399,6 +399,42 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 	if (index > N) {
 		return;
 	}
+
+	double radius = std::max(std::max(rule1Distance, rule2Distance), rule3Distance);
+	glm::vec3 min_cell = glm::vec3((int)(pos[index].x - radius)*inverseCellWidth, (int)(pos[index].y - radius)*inverseCellWidth, (int)(pos[index].z - radius)*inverseCellWidth);
+	glm::vec3 max_cell = glm::vec3((int)(pos[index].x + radius)*inverseCellWidth, (int)(pos[index].y + radius)*inverseCellWidth, (int)(pos[index].z + radius)*inverseCellWidth);
+
+	for (int i = min_cell.x; i < max_cell.x; i++) {
+		for (int j = min_cell.y; j < max_cell.y; j++) {
+			for (int k = min_cell.z; k < max_cell.z; k++) {
+				int curr_cell = gridIndex3Dto1D(all_x[i] * inverseCellWidth, all_y[j] * inverseCellWidth, all_z[k] * inverseCellWidth, gridResolution);
+				// - For each cell, read the start/end indices in the boid pointer array.
+				int start = gridCellStartIndices[curr_cell];
+				int end = gridCellEndIndices[curr_cell];
+				for (int l = start; l < end; l++) {
+					// - Access each boid in the cell and compute velocity change from
+					//   the boids rules, if this boid is within the neighborhood distance.
+					int curr_neighbor = particleArrayIndices[l];
+					// Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
+					if (index != curr_neighbor && glm::distance(pos[curr_neighbor], pos[index]) <= rule1Distance) {
+						percieved_center += pos[curr_neighbor];
+						rule1count++;
+					}
+
+					// Rule 2: boids try to stay a distance d away from each other
+					if (index != curr_neighbor && glm::distance(pos[curr_neighbor], pos[index]) <= rule2Distance) {
+						c -= (pos[index] - pos[curr_neighbor]);
+					}
+
+					// Rule 3: boids try to match the speed of surrounding boids
+					if (index != curr_neighbor && glm::distance(pos[curr_neighbor], pos[index]) <= rule3Distance) {
+						percieved_velocity += vel1[curr_neighbor];
+						rule3count++;
+					}
+				}
+			}
+		}
+	}
   // TODO-2.1 - Update a boid's velocity using the uniform grid to reduce
   // the number of boids that need to be checked.
   // - Identify the grid cell that this particle is in
