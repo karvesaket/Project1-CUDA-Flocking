@@ -170,10 +170,6 @@ void Boids::initSimulation(int N) {
   gridMinimum.y -= halfGridWidth;
   gridMinimum.z -= halfGridWidth;
 
-  //Initialize thrust arrays
-  dev_thrust_particleArrayIndices = thrust::device_ptr<int>(dev_particleArrayIndices);
-  dev_thrust_particleGridIndices = thrust::device_ptr<int>(dev_particleGridIndices);
-
   // TODO-2.1 TODO-2.3 - Allocate additional buffers here.
   cudaMalloc((void**)&dev_particleArrayIndices, N * sizeof(int));
   checkCUDAErrorWithLine("cudaMalloc dev_particleArrayIndices failed!");
@@ -186,6 +182,10 @@ void Boids::initSimulation(int N) {
 
   cudaMalloc((void**)&dev_gridCellEndIndices, gridCellCount * sizeof(int));
   checkCUDAErrorWithLine("cudaMalloc dev_gridCellEndIndices failed!");
+
+  //Initialize thrust arrays
+  dev_thrust_particleArrayIndices = thrust::device_ptr<int>(dev_particleArrayIndices);
+  dev_thrust_particleGridIndices = thrust::device_ptr<int>(dev_particleGridIndices);
 
   cudaDeviceSynchronize();
 }
@@ -600,7 +600,7 @@ void Boids::stepSimulationScatteredGrid(float dt) {
 	std::cout << "Updated Start End" << std::endl;
 	
 	// - Perform velocity updates using neighbor search
-	kernUpdateVelNeighborSearchScattered << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, 1 / gridCellWidth, gridCellWidth, dev_gridCellStartIndices, dev_gridCellEndIndices, dev_particleArrayIndices, dev_pos, dev_vel1, dev_vel2);
+	kernUpdateVelNeighborSearchScattered << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth, dev_gridCellStartIndices, dev_gridCellEndIndices, dev_particleArrayIndices, dev_pos, dev_vel1, dev_vel2);
 	std::cout << "Updated velocity" << std::endl;
 	
 	// - Update positions
@@ -619,7 +619,7 @@ void Boids::stepSimulationCoherentGrid(float dt) {
 	// - label each particle with its array index as well as its grid index.
    	//   Use 2x width grids.
 	dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
-	kernComputeIndices << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, 1 / gridCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
+	kernComputeIndices << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
 	std::cout << "Computed indices " << std::endl;
 
 	// - Unstable key sort using Thrust. A stable sort isn't necessary, but you
