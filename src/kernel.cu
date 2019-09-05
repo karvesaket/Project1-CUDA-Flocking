@@ -414,8 +414,16 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 
 	// - Identify which cells may contain neighbors. This isn't always 8.
 	double radius = glm::max(glm::max(rule1Distance, rule2Distance), rule3Distance);
-	glm::vec3 min_cell = glm::floor(pos[index] - gridMin - glm::vec3(radius) * inverseCellWidth);
-	glm::vec3 max_cell = glm::floor(pos[index] - gridMin + glm::vec3(radius) * inverseCellWidth);
+	glm::vec3 min_cell = glm::floor((pos[index] - gridMin - glm::vec3(radius)) * inverseCellWidth);
+	glm::vec3 max_cell = glm::floor((pos[index] - gridMin + glm::vec3(radius)) * inverseCellWidth);
+
+	min_cell.x = imax(0, min_cell.x);
+	min_cell.y = imax(0, min_cell.y);
+	min_cell.z = imax(0, min_cell.z);
+
+	max_cell.x = imin(gridResolution - 1, max_cell.x);
+	max_cell.y = imin(gridResolution - 1, max_cell.y);
+	max_cell.z = imin(gridResolution - 1, max_cell.z);
 
 	glm::vec3 percieved_center = glm::vec3(0.0f, 0.0f, 0.0f);
 	glm::vec3 c = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -426,7 +434,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 	for (int i = min_cell.x; i < max_cell.x; i++) {
 		for (int j = min_cell.y; j < max_cell.y; j++) {
 			for (int k = min_cell.z; k < max_cell.z; k++) {
-				int curr_cell = gridIndex3Dto1D(i * inverseCellWidth, j * inverseCellWidth, k * inverseCellWidth, gridResolution);
+				int curr_cell = gridIndex3Dto1D(i, j, k, gridResolution);
 				
 				// - For each cell, read the start/end indices in the boid pointer array.
 				int start = gridCellStartIndices[curr_cell];
