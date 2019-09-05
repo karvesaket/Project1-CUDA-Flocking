@@ -170,6 +170,10 @@ void Boids::initSimulation(int N) {
   gridMinimum.y -= halfGridWidth;
   gridMinimum.z -= halfGridWidth;
 
+  //Initialize thrust arrays
+  dev_thrust_particleArrayIndices = thrust::device_ptr<int>(dev_particleArrayIndices);
+  dev_thrust_particleGridIndices = thrust::device_ptr<int>(dev_particleGridIndices);
+
   // TODO-2.1 TODO-2.3 - Allocate additional buffers here.
   cudaMalloc((void**)&dev_particleArrayIndices, N * sizeof(int));
   checkCUDAErrorWithLine("cudaMalloc dev_particleArrayIndices failed!");
@@ -343,7 +347,8 @@ __global__ void kernComputeIndices(int N, int gridResolution,
 	if (index > N) {
 		return;
 	}
-	gridIndices[index] = gridIndex3Dto1D(pos[index].x*inverseCellWidth, pos[index].y*inverseCellWidth, pos[index].z*inverseCellWidth, gridResolution);
+	glm::vec3 grid_position_3d = glm::floor((pos[index] - gridMin)*inverseCellWidth);
+	gridIndices[index] = gridIndex3Dto1D(grid_position_3d.x, grid_position_3d.y, grid_position_3d.z, gridResolution);
 
 	indices[index] = index;
     // TODO-2.1
@@ -404,12 +409,13 @@ __global__ void kernUpdateVelNeighborSearchScattered(
   	// the number of boids that need to be checked.
   	
   	// - Identify the grid cell that this particle is in
-	int current_cell = gridIndex3Dto1D(pos[index].x*inverseCellWidth, pos[index].y*inverseCellWidth, pos[index].z*inverseCellWidth, gridResolution);
+	glm::vec3 current_cell_3d = glm::vec3(pos[index] - gridMin) * inverseCellWidth;
+	int current_cell = gridIndex3Dto1D(current_cell_3d.x, current_cell_3d.y, current_cell_3d.z, gridResolution);
 
 	// - Identify which cells may contain neighbors. This isn't always 8.
-	double radius = std::max(std::max(rule1Distance, rule2Distance), rule3Distance);
-	glm::vec3 min_cell = glm::vec3((int)(pos[index].x - radius)*inverseCellWidth, (int)(pos[index].y - radius)*inverseCellWidth, (int)(pos[index].z - radius)*inverseCellWidth);
-	glm::vec3 max_cell = glm::vec3((int)(pos[index].x + radius)*inverseCellWidth, (int)(pos[index].y + radius)*inverseCellWidth, (int)(pos[index].z + radius)*inverseCellWidth);
+	double radius = glm::max(glm::max(rule1Distance, rule2Distance), rule3Distance);
+	glm::vec3 min_cell = glm::floor(pos[index] - gridMin - glm::vec3(radius) * inverseCellWidth);
+	glm::vec3 max_cell = glm::floor(pos[index] - gridMin + glm::vec3(radius) * inverseCellWidth);
 
 	glm::vec3 percieved_center = glm::vec3(0.0f, 0.0f, 0.0f);
 	glm::vec3 c = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -483,7 +489,7 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 	int current_cell = gridIndex3Dto1D(pos[index].x*inverseCellWidth, pos[index].y*inverseCellWidth, pos[index].z*inverseCellWidth, gridResolution);
 
 	// - Identify which cells may contain neighbors. This isn't always 8.
-	double radius = std::max(std::max(rule1Distance, rule2Distance), rule3Distance);
+	double radius = glm::max(glm::max(rule1Distance, rule2Distance), rule3Distance);
 	glm::vec3 min_cell = glm::vec3((int)(pos[index].x - radius)*inverseCellWidth, (int)(pos[index].y - radius)*inverseCellWidth, (int)(pos[index].z - radius)*inverseCellWidth);
 	glm::vec3 max_cell = glm::vec3((int)(pos[index].x + radius)*inverseCellWidth, (int)(pos[index].y + radius)*inverseCellWidth, (int)(pos[index].z + radius)*inverseCellWidth);
 
@@ -506,18 +512,18 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 					// - Access each boid in the cell and compute velocity change from
 					//   the boids rules, if this boid is within the neighborhood distance.
 					// Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
-					if (index != curr_neighbor && glm::distance(pos[l], pos[index]) <= rule1Distance) {
+					if (glm::distance(pos[l], pos[index]) <= rule1Distance) {
 						percieved_center += pos[l];
 						rule1count++;
 					}
 
 					// Rule 2: boids try to stay a distance d away from each other
-					if (index != curr_neighbor && glm::distance(pos[l], pos[index]) <= rule2Distance) {
+					if (glm::distance(pos[l], pos[index]) <= rule2Distance) {
 						c -= (pos[index] - pos[l]);
 					}
 
 					// Rule 3: boids try to match the speed of surrounding boids
-					if (index != curr_neighbor && glm::distance(pos[l], pos[index]) <= rule3Distance) {
+					if (glm::distance(pos[l], pos[index]) <= rule3Distance) {
 						percieved_velocity += vel1[l];
 						rule3count++;
 					}
@@ -575,7 +581,7 @@ void Boids::stepSimulationScatteredGrid(float dt) {
    // - label each particle with its array index as well as its grid index.
    //   Use 2x width grids.
 	dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
-	kernComputeIndices << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, 1 / gridCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
+	kernComputeIndices << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
 	std::cout << "Computed indices " << std::endl;
 
 	// - Unstable key sort using Thrust. A stable sort isn't necessary, but you
@@ -583,13 +589,9 @@ void Boids::stepSimulationScatteredGrid(float dt) {
 	
 	/*thrust::fill(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_particleGridIndices);
 	thrust::fill(dev_thrust_particleArrayIndices, dev_thrust_particleArrayIndices + numObjects, dev_particleArrayIndices);*/
-
-	thrust::device_ptr<int> dev_thrust_keys(dev_particleGridIndices);
-	thrust::device_ptr<int> dev_thrust_values(dev_particleArrayIndices);
-	std::cout << "Thrust indices initialized" << std::endl;
 	
 	// LOOK-2.1 Example for using thrust::sort_by_key
-	thrust::sort_by_key(dev_thrust_keys, dev_thrust_keys + numObjects, dev_thrust_values);
+	thrust::sort_by_key(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
 	std::cout << "Sorted" << std::endl;
 
 	// - Naively unroll the loop for finding the start and end indices of each
@@ -633,30 +635,30 @@ void Boids::stepSimulationCoherentGrid(float dt) {
 	thrust::device_ptr<int> dev_thrust_values(dev_particleArrayIndices);
 	std::cout << "Thrust indices initialized" << std::endl;
 	
-	// LOOK-2.1 Example for using thrust::sort_by_key
-	thrust::sort_by_key(dev_thrust_keys, dev_thrust_keys + numObjects, dev_thrust_values);
-	std::cout << "Sorted w.r.t. dev_particleArrayIndices" << std::endl;
+	//// LOOK-2.1 Example for using thrust::sort_by_key
+	//thrust::sort_by_key(dev_thrust_keys, dev_thrust_keys + numObjects, dev_thrust_values);
+	//std::cout << "Sorted w.r.t. dev_particleArrayIndices" << std::endl;
 
-	//Sort pos array
-	//Re-initialize dev_particleGridIndices to unsorted version
-	dev_particleGridIndices = dev_particleGridIndices_unsorted;
+	////Sort pos array
+	////Re-initialize dev_particleGridIndices to unsorted version
+	//dev_particleGridIndices = dev_particleGridIndices_unsorted;
 
-	thrust::device_ptr<int> dev_thrust_keys(dev_particleGridIndices);
-	thrust::device_ptr<int> dev_thrust_values(dev_pos);
-	std::cout << "Thrust indices initialized for pos sort" << std::endl;
-	
-	// LOOK-2.1 Example for using thrust::sort_by_key
-	thrust::sort_by_key(dev_thrust_keys, dev_thrust_keys + numObjects, dev_thrust_values);
-	std::cout << "Sorted w.r.t. dev_pos" << std::endl;
+	//thrust::device_ptr<int> dev_thrust_keys(dev_particleGridIndices);
+	//thrust::device_ptr<int> dev_thrust_values(dev_pos);
+	//std::cout << "Thrust indices initialized for pos sort" << std::endl;
+	//
+	//// LOOK-2.1 Example for using thrust::sort_by_key
+	//thrust::sort_by_key(dev_thrust_keys, dev_thrust_keys + numObjects, dev_thrust_values);
+	//std::cout << "Sorted w.r.t. dev_pos" << std::endl;
 
-	//Sort vel1 array
-	//Re-initialize dev_particleGridIndices to unsorted version
-	dev_particleGridIndices = dev_particleGridIndices_unsorted;
+	////Sort vel1 array
+	////Re-initialize dev_particleGridIndices to unsorted version
+	//dev_particleGridIndices = dev_particleGridIndices_unsorted;
 
-	thrust::device_ptr<int> dev_thrust_keys(dev_particleGridIndices);
-	thrust::device_ptr<int> dev_thrust_values(dev_vel1);
-	std::cout << "Thrust indices initialized for vel1 sort" << std::endl;
-	
+	//thrust::device_ptr<int> dev_thrust_keys(dev_particleGridIndices);
+	//thrust::device_ptr<int> dev_thrust_values(dev_vel1);
+	//std::cout << "Thrust indices initialized for vel1 sort" << std::endl;
+	//
 	// LOOK-2.1 Example for using thrust::sort_by_key
 	thrust::sort_by_key(dev_thrust_keys, dev_thrust_keys + numObjects, dev_thrust_values);
 	std::cout << "Sorted w.r.t. dev_vel1" << std::endl;
