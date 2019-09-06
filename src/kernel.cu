@@ -162,7 +162,7 @@ void Boids::initSimulation(int N) {
   checkCUDAErrorWithLine("kernGenerateRandomPosArray failed!");
 
   // LOOK-2.1 computing grid params
-  gridCellWidth = std::max(std::max(rule1Distance, rule2Distance), rule3Distance);
+  gridCellWidth = 2.0f * std::max(std::max(rule1Distance, rule2Distance), rule3Distance);
   int halfSideCount = (int)(scene_scale / gridCellWidth) + 1;
   gridSideCount = 2 * halfSideCount;
 
@@ -672,7 +672,6 @@ void Boids::stepSimulationScatteredGrid(float dt) {
    //   Use 2x width grids.
 	dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
 	kernComputeIndices << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
-	std::cout << "Computed indices " << std::endl;
 
 	// - Unstable key sort using Thrust. A stable sort isn't necessary, but you
 	//   are welcome to do a performance comparison.
@@ -682,7 +681,6 @@ void Boids::stepSimulationScatteredGrid(float dt) {
 	
 	// LOOK-2.1 Example for using thrust::sort_by_key
 	thrust::sort_by_key(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
-	std::cout << "Sorted" << std::endl;
 
 	dim3 fullBlocksPerGridForGrid((gridCellCount + blockSize - 1) / blockSize);
 	kernResetIntBuffer << <fullBlocksPerGrid, blockSize >> > (gridCellCount, dev_gridCellStartIndices, -1);
@@ -691,20 +689,16 @@ void Boids::stepSimulationScatteredGrid(float dt) {
 	// - Naively unroll the loop for finding the start and end indices of each
 	//   cell's data pointers in the array of boid indices
 	kernIdentifyCellStartEnd << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
-	std::cout << "Updated Start End" << std::endl;
 	
 	// - Perform velocity updates using neighbor search
 	kernUpdateVelNeighborSearchScattered << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth, dev_gridCellStartIndices, dev_gridCellEndIndices, dev_particleArrayIndices, dev_pos, dev_vel1, dev_vel2);
-	std::cout << "Updated velocity" << std::endl;
 	
 	// - Update positions
 	kernUpdatePos << < fullBlocksPerGrid, blockSize >> > (numObjects, dt, dev_pos, dev_vel2);
-	std::cout << "Updated position" << std::endl;
 	
 	// - Ping-pong buffers as needed
 	cudaMemcpy(dev_vel1, dev_vel2, sizeof(glm::vec3) * numObjects, cudaMemcpyDeviceToDevice);
 	//dev_vel1 = dev_vel2;
-	std::cout << "Ping Pong done" << std::endl;
 }
 
 void Boids::stepSimulationCoherentGrid(float dt) {
@@ -717,26 +711,14 @@ void Boids::stepSimulationCoherentGrid(float dt) {
    //   Use 2x width grids.
 	dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
 	kernComputeIndices << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
-	std::cout << "Computed indices " << std::endl;
 
 	// - Unstable key sort using Thrust. A stable sort isn't necessary, but you
 	//   are welcome to do a performance comparison.
 
-	try
-	{
-		// LOOK-2.1 Example for using thrust::sort_by_key
-		thrust::sort_by_key(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
-		std::cout << "Sorted" << std::endl;
-	}
-	catch (thrust::system_error &e)
-	{
-		// output an error message and exit
-		std::cerr << "Error accessing vector element: " << e.what() << std::endl;
-		exit(-1);
-	}
+	// LOOK-2.1 Example for using thrust::sort_by_key
+	thrust::sort_by_key(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
 	
 	kernReShuffle << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_particleArrayIndices, dev_pos, dev_vel1, dev_vel2, dev_pos_coherent, dev_vel1_coherent, dev_vel2_coherent);
-	std::cout << "Reshuffled" << std::endl;
 
 
 	dim3 fullBlocksPerGridForGrid((gridCellCount + blockSize - 1) / blockSize);
@@ -746,7 +728,6 @@ void Boids::stepSimulationCoherentGrid(float dt) {
 	// - Naively unroll the loop for finding the start and end indices of each
 	//   cell's data pointers in the array of boid indices
 	kernIdentifyCellStartEnd << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
-	std::cout << "Updated Start End" << std::endl;
 
 	//cudaMemcpy(dev_pos, dev_pos_coherent, sizeof(glm::vec3) * numObjects, cudaMemcpyDeviceToDevice);
 	//cudaMemcpy(dev_vel1, dev_vel1_coherent, sizeof(glm::vec3) * numObjects, cudaMemcpyDeviceToDevice);
@@ -754,18 +735,11 @@ void Boids::stepSimulationCoherentGrid(float dt) {
 
 	// - Perform velocity updates using neighbor search
 	kernUpdateVelNeighborSearchCoherent << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth, dev_gridCellStartIndices, dev_gridCellEndIndices, dev_pos_coherent, dev_vel1_coherent, dev_vel2, dev_pos);
-	std::cout << "Updated velocity" << std::endl;
 
 	// - Update positions
 	kernUpdatePos << < fullBlocksPerGrid, blockSize >> > (numObjects, dt, dev_pos, dev_vel2);
-	std::cout << "Updated position" << std::endl;
 
 	cudaMemcpy(dev_vel1, dev_vel2, sizeof(glm::vec3) * numObjects, cudaMemcpyDeviceToDevice);
-	// - Ping-pong buffers as needed
-	//glm::vec3 *temp = dev_vel1;
-	//dev_vel1 = dev_vel2;
-	//dev_vel2 = temp;
-	std::cout << "Ping Pong done" << std::endl;
 
   
   // In Parallel:
