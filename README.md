@@ -9,8 +9,8 @@ Project 1 - Flocking**
 ### Sample Outputs
 1. Naive
 
-**Configuration**: Number of boids = 50,000 | Block Size = 128 | Cell width = 2 x max_distance
-![]()
+**Configuration**: Number of boids = 5,000 | Block Size = 128 | Cell width = 2 x max_distance
+![](images/naive_fixed_fast_5000.gif)
 
 2. Uniform Grid
 
@@ -32,7 +32,11 @@ Other fixed parameters: Block size = 128; Cell width = 2 x max_disatnce
 
 | With visualization | Without visualization |
 | -------------------|---------------------- |
-| ![]()              | ![]()                 |
+| ![](images/number_of_boids_visualize.png) | ![](images/number_of_boids_non_visualize.png)                 |
+
+Comparison between visualize and non-visualize for all "Uniform grid"
+
+![](images/number_of_boids_visualize_non_visualize.png)
 
 #### Effect of changing block size (number of threads per block)
 
@@ -40,13 +44,7 @@ Other fixed parameters: Number of boids = 5,000; Cell width = 2 x max_disatnce
 
 | With visualization | Without visualization |
 | -------------------|---------------------- |
-| ![]()              | ![]()                 |
-
-Other fixed parameters: Number of boids = 100,000; Cell width = 2 x max_disatnce
-
-| With visualization | Without visualization |
-| -------------------|---------------------- |
-| ![]()              | ![]()                 |
+| ![](images/block_size_visualize.png) | ![](images/block_size_non_visualize.png)                 |
 
 #### Effect of changing cell width (number of cells)
 
@@ -54,7 +52,7 @@ Other fixed parameters: Number of boids = 5,000; Block size = 128
 
 | With visualization | Without visualization |
 | -------------------|---------------------- |
-| ![]()              | ![]()                 |
+| ![](images/cell_width_visualize.png) | ![](images/cell_width_non_visualize.png)                 |
 
 #### Answers to questions
 
