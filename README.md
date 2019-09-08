@@ -15,12 +15,12 @@ Project 1 - Flocking**
 2. Uniform Grid
 
 **Configuration**: Number of boids = 50,000 | Block Size = 128 | Cell width = 2 x max_distance
-![]()
+![](images/scattered_fixed_fast_again2.gif)
 
 3. Unifirm Grid with coherent arrays
 
 **Configuration**: Number of boids = 50,000 | Block Size = 128 | Cell width = 2 x max_distance
-![]()
+![](images/cohernet_fixed_fast_again3.gif)
 
 ### Performance Analysis
 
