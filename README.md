@@ -59,15 +59,20 @@ Other fixed parameters: Number of boids = 5,000; Block size = 128
 #### Answers to questions
 
 * For each implementation, how does changing the number of boids affect performance? Why do you think this is?
-  * ANSWER
+  * The performance (frames per second) decreass as the number of boids are increased. This was clearly expected as there are more boids in the space, there will be more threads running in all and each boid will have potentially more neighbors thereby increasing the number of iterations for each thread (i.e. boid).
 
 * For each implementation, how does changing the block count and block size affect performance? Why do you think this is?
-  * ANSWER
+  * Changing the block size i.e. the number of threads per block does not have a clear trend with respect to performance. In general this could be because all memory access is currently only from the global memory. So irrespective of how many threads are per block, the memory access time remains same. For shared memory implementation, it is expected to show some performance improvement with a greater block size (but still has a trade-off with respect to how much data can be loaded into shared memory) 
 
 * For the coherent uniform grid: did you experience any performance improvements with the more coherent uniform grid? Was this the outcome you expected? Why or why not?
-  * ANSWER
+  * Yes. Coherent uniform grid has much better configuration in all the configurations. This is primarily because eliminating the middleman ensures all memory access is in contiguas memory locations. Being in contigous memory dereases the probability of cache miss and thus improves the overall performance.
 
 * Did changing cell width and checking 27 vs 8 neighboring cells affect performance? Why or why not? Be careful: it is insufficient (and possibly incorrect) to say that 27-cell is slower simply because there are more cells to check!
-  * ANSWER
+  * More number of cell (i.e. a smaller cell width) increases the granularity of the volume that is being searched. If the granularity os smaller, we are potentially searching through a smaller volume as compared to bigger cells. Hence, this affects the number of neighboring boids (more for smaller cell width), and thus affects the performance (less performance i.e. fps for a larger cell width). But, if we decrease the cell width a lot, it means that now we look at many smaller cells and has lesser boids in each cell. This means we lose the advantage of contiguous memory we were getting by sorting. Hence, the performance goes down when we make cell-width half the max distance.
 
 #### General trend and conclusion
+
+- Increasing the number of boids decreases the performance
+- Block size does not affect the performance significantly (because we are not using shared memory)
+- The difference in performance is sligtly more significant when block size is changed with more number of boids
+- When cell-width is equal to maximum distance (27 neighboring cells), the performance is better than when the cell-width is twice the max_distance (because of more granular cells in the former case)
