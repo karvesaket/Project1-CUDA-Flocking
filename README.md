@@ -5,6 +5,9 @@ Project 1 - Flocking**
   * [LinkedIn](https://www.linkedin.com/in/saket-karve-43930511b/), [twitter](), etc.
 * Tested on:  Windows 10 Education, Intel(R) Core(TM) i7-6700 CPU @ 3.40GHz 16GB, NVIDIA Quadro P1000 @ 4GB (Moore 100B Lab)
 
+### Description
+
+A detailed overview of the implementation in this repository can be found [here](https://github.com/karvesaket/Project1-CUDA-Flocking/blob/master/INSTRUCTION.md)
 
 ### Sample Outputs
 1. Naive
@@ -74,3 +77,7 @@ Other fixed parameters: Number of boids = 5,000; Block size = 128
 - Block size does not affect the performance significantly (because we are not using shared memory)
 - The difference in performance is sligtly more significant when block size is changed with more number of boids
 - When cell-width is equal to maximum distance (27 neighboring cells), the performance is better than when the cell-width is twice the max_distance (because of more granular cells in the former case)
+
+#### Extra Credit
+
+**Grid Looping Optimization**: When checking the neighboring cells in the uniform grid approach, the loop iterates over only those cells which can have any part of the sphere based on the boid's position thereby avoiding unecessary checks over cells which are gauranteed to be outside the maximum distance. This is done by considering only those cells which are part of the cube surrounding the boid and are at a distance of max_distance either side instead of always looping over a fixed number of cells.
